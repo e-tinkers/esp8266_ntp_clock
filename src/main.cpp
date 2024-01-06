@@ -49,8 +49,8 @@ IPAddress subnet(255, 255, 255, 0);
 IPAddress dns(1,1,1,1);
 const char* ssid = "your-wifi-ssid";
 const char* password = "your-wifi-password";
-const int channel = 2;                                     // check your wifi channel
-const uint8_t bssid[] = {0x99,0xAA, 0xBB,0xCC,0xEE,0xFF};  // check your wifi mac address
+const int channel = 2;                                     // this must match your wifi router channel
+const uint8_t bssid[] = {0x99,0xAA, 0xBB,0xCC,0xEE,0xFF};  // this must match your wifi router mac address
 const char* ntpServer = "sg.pool.ntp.org";    // use pool.ntp.org or other local NTP server
 
 // state machine variables
@@ -146,7 +146,7 @@ void testLED() {
 
     for(int l = 0; l < LEDS; l++) {
         turnOnLED( l );
-        delay( 5000 / LEDS );
+        delay( DISPLAY_TIME / LEDS );
     }
 
 }
@@ -165,7 +165,7 @@ void setup() {
     }
 
     configTime(DAY_LIGHT_SAVING, TIME_ZONE, ntpServer);
-    while (time(nullptr) < 1649289600) {
+    while (time(nullptr) < UTC_TEST_TIME) {
         yield();
     };
 
