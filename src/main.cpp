@@ -195,7 +195,7 @@ void loop() {
     delay(1);
 
     while (millis() - displayStart > DISPLAY_TIME) {
-        if (t->tm_hour > NIGHT_MODE_START && t->tm_hour < NIGHT_MODE_END)
+        if (t->tm_hour >= NIGHT_MODE_START || t->tm_hour < NIGHT_MODE_END)
             ESP.deepSleep(NIGHT_SLEEP_TIME);
         else
             ESP.deepSleep(DAY_SLEEP_TIME);
