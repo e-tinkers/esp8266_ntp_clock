@@ -1,6 +1,10 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <time.h>
+#include <sntp.h>
+extern "C" {
+  #include "user_interface.h"
+}
 
 // RTC Time constants
 #define TIME_ZONE           28800       // GMT + 8
@@ -8,10 +12,11 @@
 #define UTC_TEST_TIME       1649289600  // Thu, 07 Apr 2022 00:00:00 +0000
 
 #define DISPLAY_TIME        5000
-#define NIGHT_MODE_START    22          // night mode started after 22:00 (10:00pm)
-#define NIGHT_MODE_END      7           // night mode ended after 7:00 (7:00am)
+#define NIGHT_MODE_START    23          // night mode started after 22:00 (10:00pm)
+#define NIGHT_MODE_END      8           // night mode ended after 7:00 (7:00am)
 #define DAY_SLEEP_TIME      300e6       // 300 seconds (5 mins)
 #define NIGHT_SLEEP_TIME    3600e6      // 1 hour
+#define NTP_SYNC_HOUR       1L        // Every 1 hour
 
 // GPIO pins
 #define P1         5   // D1
@@ -49,8 +54,8 @@ IPAddress subnet(255, 255, 255, 0);
 IPAddress dns(1,1,1,1);
 const char* ssid = "your-wifi-ssid";
 const char* password = "your-wifi-password";
-const int channel = 2;                                     // this must match your wifi router channel
-const uint8_t bssid[] = {0x99,0xAA, 0xBB,0xCC,0xEE,0xFF};  // this must match your wifi router mac address
+const int channel = 2;                                         // this must match your wifi router channel
+const uint8_t bssid[] = {0x7c, 0x8b, 0xca, 0x31, 0x61, 0x91};  // this must match your wifi router mac address
 const char* ntpServer = "sg.pool.ntp.org";    // use pool.ntp.org or other local NTP server
 
 // state machine variables
@@ -61,6 +66,11 @@ unsigned long onTimer = 0;
 unsigned long offTimer = 0;
 unsigned long intervalTimer = 0;
 unsigned long displayStart = 0;
+
+int32_t nextUpdate{0};
+
+time_t now;
+struct tm* t;
 
 void turnOnLED(uint8_t led) {
 
@@ -151,10 +161,7 @@ void testLED() {
 
 }
 
-void setup() {
-
-    // Serial.begin(74880);
-    // while (!Serial) {};
+void turnOnWiFi() {
 
     WiFi.persistent(false);
     WiFi.mode(WIFI_STA);
@@ -164,15 +171,45 @@ void setup() {
         delay(10);
     }
 
+}
+
+void updateNTP() {
+
     configTime(DAY_LIGHT_SAVING, TIME_ZONE, ntpServer);
-    while (time(nullptr) < UTC_TEST_TIME) {
+    while (time(nullptr) < UTC_TEST_TIME)
         yield();
-    };
+
+    now = time(nullptr);
+    t = localtime(&now);
+    nextUpdate = t->tm_hour + NTP_SYNC_HOUR;
+    system_rtc_mem_write(64, &nextUpdate, sizeof(nextUpdate));  // write nextUpdate value to rtc memory
+    // Serial.println("Sync with NTP");
+}
+
+void turnOffWiFi() {
 
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     WiFi.forceSleepBegin();
-    delay(1);
+
+}
+
+void setup() {
+
+    // Serial.begin(74880);
+    // while (!Serial) {};
+
+    struct rst_info *rstInfo = system_get_rst_info();
+    system_rtc_mem_read(64, &nextUpdate, sizeof(nextUpdate));  // get nextUpdate value from rtc memory
+    system_rtc_mem_read(68, &now, sizeof(now));                // read back the savedTimestamp
+    sntp_set_timezone(TIME_ZONE/3600);
+    t = localtime(&now);
+    // if reset is caused by first power up (reason=0) or current hour is equal to the update hour
+    if ((rstInfo->reason == 0) | (nextUpdate == t->tm_hour)) {
+        turnOnWiFi();
+        updateNTP();
+        turnOffWiFi();
+    }
 
     displayStart = millis();
 
@@ -182,23 +219,26 @@ void loop() {
 
     // testLED();
 
-    time_t now = time(nullptr);
-    struct tm* t = localtime(&now);
-
     uint8_t hour = t->tm_hour % 12;
     uint8_t fiveMinuteInterval = t->tm_min / 5;
     uint8_t flashes = t->tm_min % 5;
 
     turnOnLED(hour);
-    delay(1);
     flashLED(fiveMinuteInterval, flashes);
-    delay(1);
 
-    while (millis() - displayStart > DISPLAY_TIME) {
-        if (t->tm_hour >= NIGHT_MODE_START || t->tm_hour < NIGHT_MODE_END)
+    if (millis() - displayStart > DISPLAY_TIME) {
+        if (t->tm_hour >= NIGHT_MODE_START || t->tm_hour < NIGHT_MODE_END) {
+            now = now + (time_t) (NIGHT_SLEEP_TIME/1e6 + DISPLAY_TIME/1000);
+            system_rtc_mem_write(68, &now, sizeof(now));
             ESP.deepSleep(NIGHT_SLEEP_TIME);
-        else
+        }
+        else {
+            now = now + (time_t) (DAY_SLEEP_TIME/1e6 + DISPLAY_TIME/1000);
+            system_rtc_mem_write(68, &now, sizeof(now));
             ESP.deepSleep(DAY_SLEEP_TIME);
+        }
     }
+
+    delay(1);
 
 }
