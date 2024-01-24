@@ -2,9 +2,10 @@
 #include <ESP8266WiFi.h>
 #include <time.h>
 #include <sntp.h>
-extern "C" {
-  #include "user_interface.h"
-}
+
+// Reset Reason
+#define POWER_UP_RESET 0
+#define HARDWARE_RESET 6
 
 // RTC Time constants
 #define TIME_ZONE           28800       // GMT + 8
@@ -197,7 +198,7 @@ void turnOffWiFi() {
 void setup() {
 
     // Serial.begin(74880);
-    // while (!Serial) {};
+    // delay(1000);
 
     struct rst_info *rstInfo = system_get_rst_info();
     system_rtc_mem_read(64, &nextUpdate, sizeof(nextUpdate));  // get nextUpdate value from rtc memory
@@ -205,7 +206,7 @@ void setup() {
     sntp_set_timezone(TIME_ZONE/3600);
     t = localtime(&now);
     // if reset is caused by first power up (reason=0) or current hour is equal to the update hour
-    if ((rstInfo->reason == 0) | (nextUpdate == t->tm_hour)) {
+    if ((rstInfo->reason == POWER_UP_RESET) | (rstInfo->reason == HARDWARE_RESET) | (nextUpdate == t->tm_hour)) {
         turnOnWiFi();
         updateNTP();
         turnOffWiFi();
