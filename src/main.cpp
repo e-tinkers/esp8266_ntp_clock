@@ -13,8 +13,8 @@
 #define UTC_TEST_TIME       1649289600  // Thu, 07 Apr 2022 00:00:00 +0000
 
 #define DISPLAY_TIME        5000
-#define NIGHT_MODE_START    23          // night mode started after 22:00 (10:00pm)
-#define NIGHT_MODE_END      8           // night mode ended after 7:00 (7:00am)
+// #define NIGHT_MODE_START    23          // night mode started after 22:00 (10:00pm)
+// #define NIGHT_MODE_END      8           // night mode ended after 7:00 (7:00am)
 #define DAY_SLEEP_TIME      300e6       // 300 seconds (5 mins)
 #define NIGHT_SLEEP_TIME    3600e6      // 1 hour
 #define NTP_SYNC_HOUR       1L        // Every 1 hour
@@ -225,21 +225,14 @@ void loop() {
     uint8_t flashes = t->tm_min % 5;
 
     turnOnLED(hour);
+    delay(1);
     flashLED(fiveMinuteInterval, flashes);
+    delay(1);
 
     if (millis() - displayStart > DISPLAY_TIME) {
-        if (t->tm_hour >= NIGHT_MODE_START || t->tm_hour < NIGHT_MODE_END) {
-            now = now + (time_t) (NIGHT_SLEEP_TIME/1e6 + DISPLAY_TIME/1000);
-            system_rtc_mem_write(68, &now, sizeof(now));
-            ESP.deepSleep(NIGHT_SLEEP_TIME);
-        }
-        else {
             now = now + (time_t) (DAY_SLEEP_TIME/1e6 + DISPLAY_TIME/1000);
             system_rtc_mem_write(68, &now, sizeof(now));
             ESP.deepSleep(DAY_SLEEP_TIME);
-        }
     }
-
-    delay(1);
 
 }
