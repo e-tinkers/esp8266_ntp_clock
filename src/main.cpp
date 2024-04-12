@@ -1,3 +1,7 @@
+/*
+Version 1.0.1 - Improve battery life from 45 days to 163 days. Details described in
+https://www.e-tinkers.com/2024/01/ntp-clock-project-revisit-and-esp8266-rtc-memory/
+*/
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <time.h>
@@ -13,11 +17,9 @@
 #define UTC_TEST_TIME       1649289600  // Thu, 07 Apr 2022 00:00:00 +0000
 
 #define DISPLAY_TIME        5000
-// #define NIGHT_MODE_START    23          // night mode started after 22:00 (10:00pm)
-// #define NIGHT_MODE_END      8           // night mode ended after 7:00 (7:00am)
 #define DAY_SLEEP_TIME      300e6       // 300 seconds (5 mins)
-#define NIGHT_SLEEP_TIME    3600e6      // 1 hour
-#define NTP_SYNC_HOUR       1L        // Every 1 hour
+// #define NIGHT_SLEEP_TIME    3600e6      // 1 hour
+#define NEXT_HOUR       1L          // Every 1 hour
 
 // GPIO pins
 #define P1         5   // D1
@@ -57,7 +59,7 @@ const char* ssid = "your-wifi-ssid";
 const char* password = "your-wifi-password";
 const int channel = 2;                                         // this must match your wifi router channel
 const uint8_t bssid[] = {0x7c, 0x8b, 0xca, 0x31, 0x61, 0x91};  // this must match your wifi router mac address
-const char* ntpServer = "sg.pool.ntp.org";    // use pool.ntp.org or other local NTP server
+const char* ntpServer = "sg.pool.ntp.org";                     // use pool.ntp.org or other local NTP server
 
 // state machine variables
 enum States {BEGIN, LED_ON, LED_OFF, END};
@@ -68,7 +70,7 @@ unsigned long offTimer = 0;
 unsigned long intervalTimer = 0;
 unsigned long displayStart = 0;
 
-int32_t nextUpdate{0};
+int32_t nextNtpSync{0};
 
 time_t now;
 struct tm* t;
@@ -182,9 +184,9 @@ void updateNTP() {
 
     now = time(nullptr);
     t = localtime(&now);
-    nextUpdate = t->tm_hour + NTP_SYNC_HOUR;
-    system_rtc_mem_write(64, &nextUpdate, sizeof(nextUpdate));  // write nextUpdate value to rtc memory
-    // Serial.println("Sync with NTP");
+    nextNtpSync = (t->tm_hour + NEXT_HOUR) % 24;
+    system_rtc_mem_write(64, &nextNtpSync, sizeof(nextNtpSync));  // write nextNtpSync value to rtc memory
+    // Serial.printf("Sync with NTP, next Sync %d now=%02d:%02d\n", nextNtpSync, t->tm_hour, t->tm_min);
 }
 
 void turnOffWiFi() {
@@ -197,16 +199,17 @@ void turnOffWiFi() {
 
 void setup() {
 
-    // Serial.begin(74880);
-    // delay(1000);
+    // Serial.begin(115200);
+    // delay(3000);
 
     struct rst_info *rstInfo = system_get_rst_info();
-    system_rtc_mem_read(64, &nextUpdate, sizeof(nextUpdate));  // get nextUpdate value from rtc memory
-    system_rtc_mem_read(68, &now, sizeof(now));                // read back the savedTimestamp
+    system_rtc_mem_read(64, &nextNtpSync, sizeof(nextNtpSync));  // get nextNtpSync value from rtc memory
+    system_rtc_mem_read(68, &now, sizeof(now));                  // read back the savedTimestamp
+
     sntp_set_timezone(TIME_ZONE/3600);
     t = localtime(&now);
     // if reset is caused by first power up (reason=0) or current hour is equal to the update hour
-    if ((rstInfo->reason == POWER_UP_RESET) | (rstInfo->reason == HARDWARE_RESET) | (nextUpdate == t->tm_hour)) {
+    if ((rstInfo->reason == POWER_UP_RESET) | (rstInfo->reason == HARDWARE_RESET) | (nextNtpSync == t->tm_hour)) {
         turnOnWiFi();
         updateNTP();
         turnOffWiFi();
@@ -230,9 +233,9 @@ void loop() {
     delay(1);
 
     if (millis() - displayStart > DISPLAY_TIME) {
-            now = now + (time_t) (DAY_SLEEP_TIME/1e6 + DISPLAY_TIME/1000);
-            system_rtc_mem_write(68, &now, sizeof(now));
-            ESP.deepSleep(DAY_SLEEP_TIME);
+        now = now + (time_t) (DAY_SLEEP_TIME/1e6 + DISPLAY_TIME/1000);
+        system_rtc_mem_write(68, &now, sizeof(now));
+        ESP.deepSleep(DAY_SLEEP_TIME);
     }
 
 }
