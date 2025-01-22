@@ -51,14 +51,14 @@ const uint8_t mux[LEDS][2][4] = {
 // network configuration - change based on your local settings
 // refer to https://www.e-tinkers.com/2022/04/esp8266-ntp-clock-with-ntp-update-and-charlieplexing/ on
 // how to obtain channel and bssid
-IPAddress ip(192, 168, 0, 120);
-IPAddress gateway(192, 168, 0, 1);
+IPAddress ip(192, 168, 18, 201);
+IPAddress gateway(192, 168, 18, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress dns(1,1,1,1);
-const char* ssid = "your-wifi-ssid";
-const char* password = "your-wifi-password";
-const int channel = 2;                                         // this must match your wifi router channel
-const uint8_t bssid[] = {0x7c, 0x8b, 0xca, 0x31, 0x61, 0x91};  // this must match your wifi router mac address
+const char* ssid = "your wifi ssid";
+const char* password = "your wifi password";
+const int channel = 6;                                         // this must match your wifi router channel
+const uint8_t bssid[] = {0xa0, 0x89, 0x66, 0x89, 0x52, 0x91};  // this must match your wifi router mac address
 const char* ntpServer = "sg.pool.ntp.org";                     // use pool.ntp.org or other local NTP server
 
 // state machine variables
